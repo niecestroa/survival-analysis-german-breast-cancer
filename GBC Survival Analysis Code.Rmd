@@ -1,0 +1,637 @@
+---
+title: "BIST0627 Group 4 Project Code"
+author: "Kristine Liu, Aaron Niecestro, Martha Rivera"
+date: "May 3, 2021"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE, eval = FALSE)
+```
+
+### Loading Packages
+
+```{r}
+library(tidyverse)
+library(survival)
+library(asaur)
+```
+
+### Loading Data 
+
+```{r}
+setwd('C:/Users/aniec/Documents/BIST0627 Applied Survival Data Analysis/BIST0627 Project')
+gbcs <- read.csv("~/BIST0627 Applied Survival Data Analysis/BIST0627 Project/project_data_files/gbcs.csv")
+head(gbcs)
+summary(gbcs)
+```
+
+### Cleaning Dataset
+
+```{r}
+gbcs2 <- gbcs %>%
+  mutate(age = as.numeric(age),
+         menopause_f = ifelse(gbcs$menopause=="1","Yes","No"),
+         menopause_f = as.factor(menopause_f),
+         hormone_f = ifelse(gbcs$hormone=="1","Yes","No"),
+         hormone_f = as.factor(hormone_f),
+         size = as.numeric(size),
+         grade_f = as.factor(grade),
+         nodes = as.numeric(nodes),
+         prog_recp = as.numeric(prog_recp),
+         estrg_recp = as.numeric(estrg_recp),
+         rectime = as.numeric(rectime),
+         censrec_f = ifelse(gbcs$censrec=="1","Recurrence","Censored"),
+         censrec_f = as.factor(censrec_f),
+         survtime = as.numeric(survtime),
+         censdead = as.numeric(censdead),
+         age.med_f = ifelse(gbcs$age>53,"Above(>53)","Below(=<53)"),
+         age.med_f = as.factor(age.med_f),
+         rectime.med_f = ifelse(gbcs$rectime>1084.0,"Above","Below"),
+         rectime.med_f = as.factor(rectime.med_f)
+         ) %>%
+  select(-id, -diagdateb, -recdate, -deathdate, -menopause, -hormone, -grade, -censrec)
+head(gbcs2)
+
+attach(gbcs2)
+```
+
+### Step 1: Find Null model
+
+```{r}
+null.model.gbcs <- coxph(Surv(survtime, censdead) ~ 1 , data=gbcs2)
+null.model.gbcs
+```
+
+### Step 2: Find the residuals for the Null Model
+
+```{r}
+rr <- residuals(null.model.gbcs)
+
+# Numeric Variables
+
+# Variable = age
+plot(rr ~ age, xlab="Age at Time of Diagnosis", ylab="Residual")
+lines(lowess(rr ~ age), col="blue")
+
+# Variable = size
+plot(rr ~ size, xlab="Size of Tumor", ylab="Residual")
+lines(lowess(rr ~ size), col="blue")
+
+# Variable = nodes
+# Plot of the martingale residuals vs that covariate 
+plot(rr ~ nodes, xlab="Number of Nodes", ylab="Martingale Residuals")
+lines(lowess(rr ~ nodes), col="blue")
+title("Martingale Residuals versus nodes")
+# The blue line is similar to a log curve but not as extreme as a log curve might be
+# I can conclude that the plot above does not seem to have a linear relationship
+# Transformations are recommended - Thinking of making this log and seeing what happens
+
+# log hazard transformation as discussed in class
+plot(rr ~ nodes, lty=2, log="x", xlab="Number of Nodes", ylab="Martingale Residuals")
+lines(lowess(rr ~ nodes), col="red")
+title("Martingale Residuals versus log nodes")
+
+# Now it looks like a somewhat flat quadratic line that is so to spike upwards
+# It has a better shape than before but I am unsure if what I did completely helped or not
+# More analysis will need to be conducted to see if there is any better transformations 
+
+# Variable = prog_recp
+plot(rr ~ prog_recp, xlab="Number of Progesterone Receptors", ylab="Residual")
+lines(lowess(rr ~ prog_recp), col="blue")
+
+# Variable = estrg_recp
+plot(rr ~ estrg_recp, xlab="Number of Estrogen Receptors", ylab="Residual")
+lines(lowess(rr ~ estrg_recp), col="blue")
+
+# Variable = rectime
+plot(rr ~ rectime, xlab="Time until Recurrence", ylab="Residual", main="Martingale Plot of the Time unitl an Recurrence")
+lines(lowess(rr ~ rectime), col="red", lwd=2)
+
+# Variable = survtime
+plot(rr ~ survtime, xlab="Time until a Subject's Death", ylab="Residual")
+lines(lowess(rr ~ survtime), col="blue")
+```
+
+```{r}
+# Categorical Variables
+
+# Variable = censrec_f
+plot(rr ~ censrec_f, xlab="Censoring of Recurrence", ylab="Residual")
+lines(lowess(rr ~ censrec_f), col="blue")
+
+# Variable = menopause_f
+plot(rr ~ menopause_f, xlab="Menopause Status", ylab="Residual")
+lines(lowess(rr ~ menopause_f), col="blue")
+
+# Variable = hormone_f
+plot(rr ~ hormone_f, xlab="Hormone Therapy", ylab="Residual")
+lines(lowess(rr ~ hormone_f), col="blue")
+
+# Variable = grade_f
+plot(rr ~ grade_f, xlab="Grade of Tumor", ylab="Residual")
+lines(lowess(rr ~ grade_f), col="blue")
+
+# Variable = censdead
+plot(rr ~ censdead, xlab="Censoring of Patient Death", ylab="Residual")
+lines(lowess(rr ~ censdead), col="blue")
+
+# Variable = age.med_f
+plot(rr ~ age.med_f, xlab="Age at Time of Diagnosis", ylab="Residual")
+lines(lowess(rr ~ age.med_f), col="blue")
+
+# Variable = rectime.med_f
+plot(rr ~ rectime.med_f, xlab="Age at Time of Diagnosis", ylab="Residual")
+lines(lowess(rr ~ rectime.med_f), col="blue")
+```
+
+### Step 3: Fit a multivariable model containing all variables significant in univariate analyses.
+
+```{r}
+# Orignal Dataset Variables
+fit.all.gbcs <- coxph(Surv(survtime, censdead) ~ . -age.med_f -rectime.med_f, data=gbcs2)
+fit.all.gbcs
+# statistically significant variables = size, prog_recp, rectime
+```
+
+```{r}
+# After Adding variables - made sure there were no co-variate among vairables
+
+(fit.all.gbcs2 <- coxph(Surv(survtime, censdead) ~ . -age -rectime, data=gbcs2) )
+# statistically significant variables = size, prog_recp, rectime.med_f
+
+(fit.all.gbcs3 <- coxph(Surv(survtime, censdead) ~ . -age -rectime.med_f, data=gbcs2) )
+# statistically significant variables = size, prog_recp, rectime
+
+(fit.all.gbcs4 <- coxph(Surv(survtime, censdead) ~ . -age.med_f -rectime, data=gbcs2) )
+# statistically significant variables = size, prog_recp, rectime.med_f
+
+(fit.all.gbcs5 <- coxph(Surv(survtime, censdead) ~ . -age.med_f -rectime.med_f, data=gbcs2) )
+# statistically significant variables = size, prog_recp, rectime
+
+# So the only difference from adding new variables or not with this step is whether to choose the variable rectime or rectime.med_f
+```
+
+### Step 4: Use p-values from the individual covariates to identify covariates that might be deleted from the model.
+
+Variables that are not statistically significant (Variables that have p-values that are greater than 0.05):\
+1. age,\
+2. nodes,\
+3. estrg_recp.\
+4. menopause_f=yes,\
+5. hormone_f=yes,\
+6. grade_f=2,\
+7. grade_f=3,\
+8. censrec_f=Recurrence.\
+\
+Variables that are statistically significant (Variables that have p-values that are less than 0.05):\:
+1. size,\
+2. prog_recp\
+3. rectime.
+
+```{r}
+# Original Dataset Variables
+(fit.reduced.gbcs <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime) )
+fit.reduced.gbcs
+
+# Modified Dataset Variables
+(fit.reduced.gbcs2 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f) )
+fit.reduced.gbcs2
+```
+
+### Step 5: Using the reduced model, find covariates that produce “important” changes in the coefficients. “20% reduction” is a possible rule of thumb.
+
+```{r}
+fit.reduced.gbcs
+fit.reduced.gbcs2
+```
+
+Variable for size p-value did not change much so not clinically significant. Might think of droppping this variable.\
+All other p-values changed beyond 20%. 
+
+### Step 6: Re-examine one at a time all variables excluded from the initial multivariate model to see if they now belong in the model.
+#### Note: The result should be the preliminary main effects model
+
+```{r}
+(fit.re.examine.gcbs1 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + age) )
+(fit.re.examine.gcbs2 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + nodes) )
+(fit.re.examine.gcbs3 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + estrg_recp) )
+(fit.re.examine.gcbs4 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + menopause_f) )
+(fit.re.examine.gcbs5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + hormone_f) )
+(fit.re.examine.gcbs6 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + grade_f) )
+(fit.re.examine.gcbs7 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + censrec_f) )
+(fit.re.examine.gcbs8 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + age.med_f) )
+```
+
+
+```{r}
+(fit.re.examine.gcbs1.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + age) )
+(fit.re.examine.gcbs2.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + nodes) )
+(fit.re.examine.gcbs3.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + estrg_recp) )
+(fit.re.examine.gcbs4.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + menopause_f) )
+(fit.re.examine.gcbs5.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + hormone_f) )
+(fit.re.examine.gcbs6.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + grade_f) )
+(fit.re.examine.gcbs7.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + censrec_f) )
+(fit.re.examine.gcbs8.5 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime.med_f + age.med_f) )
+```
+
+### Step 7: Examine whether transformations of any of the continuous variables are appropriate. You can use spline models or quadratic or log transformations.
+#### Note: The result should be the main effects model
+
+```{r}
+# Basic model splines
+(fit.spline.gcbs1 <- coxph(Surv(survtime,censdead) ~ pspline(size) + prog_recp + rectime) )
+termplot(fit.spline.gcbs1, term=3, se=TRUE, col.term=1, col.se="blue")
+(fit.spline.gcbs2 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + pspline(rectime)) )
+termplot(fit.spline.gcbs2, term=3, se=TRUE, col.term=1, col.se="blue")
+
+# Individal Spline transformations
+(fit.spline1 <- coxph(Surv(survtime,censdead) ~ pspline(age) ) )
+termplot(fit.spline1, term=1, se=TRUE, col.term=1, col.se="blue")
+(fit.spline2 <- coxph(Surv(survtime,censdead) ~ pspline(size) ) )
+termplot(fit.spline2, term=1, se=TRUE, col.term=1, col.se="blue")
+(fit.spline3 <- coxph(Surv(survtime,censdead) ~ pspline(nodes) ) )
+termplot(fit.spline3, term=1, se=TRUE, col.term=1, col.se="blue")
+(fit.spline4 <- coxph(Surv(survtime,censdead) ~ pspline(prog_recp) ) )
+termplot(fit.spline4, term=1, se=TRUE, col.term=1, col.se="blue")
+(fit.spline5 <- coxph(Surv(survtime,censdead) ~ pspline(estrg_recp) ) )
+termplot(fit.spline5, term=1, se=TRUE, col.term=1, col.se="blue")
+(fit.spline6 <- coxph(Surv(survtime,censdead) ~ pspline(rectime) ) )
+termplot(fit.spline6, term=1, se=TRUE, col.term=1, col.se="blue")
+```
+
+```{r}
+# Log transformations 
+
+# Variable = age
+plot(rr ~ age, log="x", xlab="Age", ylab="Residual")
+lines(lowess(rr ~ age), col="blue")
+
+# Variable = size
+plot(rr ~ size, log="x", xlab="Size of Tumor", ylab="Residual")
+lines(lowess(rr ~ size), col="blue")
+
+# Variable = nodes
+plot(rr ~ nodes, log="x", xlab="Number of Nodes", ylab="Residual")
+lines(lowess(rr ~ nodes), col="blue")
+
+# Variable = prog_recp
+plot(rr ~ prog_recp, log="x", xlab="Number of Progesterone Receptors", ylab="Residual")
+lines(lowess(rr ~ prog_recp), col="blue")
+
+# Variable = estrg_recp
+plot(rr ~ estrg_recp, log="x", xlab="Number of Estrogen Receptors", ylab="Residual")
+lines(lowess(rr ~ estrg_recp), col="blue")
+
+# Variable = rectime
+plot(rr ~ rectime, log="x", xlab="Time until Recurrence", ylab="Residual")
+lines(lowess(rr ~ size), col="blue")
+```
+
+
+```{r}
+# Quadratic transformations
+
+(fit.quad.trans1 <- coxph(Surv(survtime,censdead) ~ pspline(age, 2) ) )
+termplot(fit.quad.trans1, term=1, se=TRUE, col.term=1, col.se="blue")
+
+```
+
+### Step 8: Determine if interactions are needed in the model.
+
+```{r}
+# Models with interactions 
+null.model.gbcs <- coxph(Surv(survtime, censdead) ~ 1 , data=gbcs)
+(fit.interact1 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime) ) # model from step 6
+(fit.interact2 <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + age) ) 
+(fit.interact3 <- coxph(Surv(survtime,censdead) ~ size*grade_f + prog_recp + rectime) ) 
+(fit.interact4 <- coxph(Surv(survtime,censdead) ~ size*menopause_f + prog_recp + rectime) ) 
+(fit.interact5 <- coxph(Surv(survtime,censdead) ~ size*hormone_f + prog_recp + rectime) ) 
+(fit.interact6 <- coxph(Surv(survtime,censdead) ~ size*censrec_f + prog_recp + rectime) ) 
+(fit.interact7 <- coxph(Surv(survtime,censdead) ~ size*log(nodes) + prog_recp + rectime) ) 
+(fit.interact8 <- coxph(Surv(survtime,censdead) ~ size + menopause_f*grade_f + prog_recp* + rectime) ) 
+(fit.interact9 <- coxph(Surv(survtime,censdead) ~ size + menopause_f*hormone_f + + prog_recp + rectime) ) 
+(fit.interact10 <- coxph(Surv(survtime,censdead) ~ size + menopause_f*censrec_f + + prog_recp + rectime) ) 
+```
+
+```{r}
+# Testing Models with anova with first model from step 6
+anova(fit.interact1, fit.interact2) # works
+anova(fit.interact1, fit.interact3) 
+anova(fit.interact1, fit.interact4)
+anova(fit.interact1, fit.interact5)
+anova(fit.interact1, fit.interact6) # works
+anova(fit.interact1, fit.interact7) # works
+anova(fit.interact1, fit.interact8) 
+anova(fit.interact1, fit.interact9)
+anova(fit.interact1, fit.interact10) # works
+```
+
+```{r}
+# Testing models with anova from new models
+anova(fit.interact2, fit.interact3) 
+anova(fit.interact2, fit.interact4)
+anova(fit.interact2, fit.interact5)
+anova(fit.interact2, fit.interact6) # works
+anova(fit.interact2, fit.interact7)
+anova(fit.interact2, fit.interact8) 
+anova(fit.interact2, fit.interact9)
+anova(fit.interact2, fit.interact10) # works
+```
+
+```{r} 
+fit.full.model <- coxph(Surv(survtime, censdead) ~., data=gbcs2)
+fit.reduced.gbcs <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime)
+fit.full.inter <- coxph(Surv(survtime,censdead) ~ (. -rectime.med_f -age.med_f)^2, data=gbcs2)
+fit.full.all.var <- coxph(Surv(survtime,censdead) ~ (.)^2, data=gbcs2)
+```
+
+```{r} 
+# AIC Stepwise Selection
+step(fit.full.inter)
+step(fit.full.all.var)
+```
+
+```{r} 
+# Final Model From AIC Stepwise Selection
+model.aic.gbcs <- coxph(formula = Surv(survtime, censdead) ~ age + size + nodes + 
+    prog_recp + estrg_recp + rectime + menopause_f + hormone_f + 
+    grade_f + censrec_f + age:size + age:estrg_recp + age:menopause_f + 
+    age:hormone_f + age:grade_f + size:hormone_f + size:grade_f + 
+    nodes:prog_recp + nodes:rectime + nodes:hormone_f + nodes:grade_f + 
+    prog_recp:rectime + prog_recp:grade_f + estrg_recp:hormone_f + 
+    rectime:grade_f + menopause_f:hormone_f + menopause_f:grade_f + 
+    hormone_f:grade_f, data = gbcs2)
+model.aic.gbcs
+```
+
+```{r}
+# BIC Stepwise Selection
+step(fit.full.inter, direction = "backward", criterion = "BIC")
+```
+
+```{r}
+(model.bic.gbcs <- coxph(formula = Surv(survtime, censdead) ~ age + size + nodes + 
+    prog_recp + estrg_recp + rectime + menopause_f + hormone_f + 
+    grade_f + censrec_f + age:size + age:estrg_recp + age:menopause_f + 
+    age:hormone_f + age:grade_f + size:hormone_f + size:grade_f + 
+    nodes:prog_recp + nodes:rectime + nodes:hormone_f + nodes:grade_f + 
+    prog_recp:rectime + prog_recp:grade_f + estrg_recp:hormone_f + 
+    rectime:grade_f + menopause_f:hormone_f + menopause_f:grade_f + 
+    hormone_f:grade_f, data = gbcs2) )
+model.bic.gbcs
+```
+
+```{r}
+# AIC Anova Testing for variable & model selection
+anova(fit.full.model, model.aic.gbcs)
+anova(fit.reduced.gbcs, model.aic.gbcs)
+
+# BIC Anova Testing
+anova(fit.full.model, model.bic.gbcs)
+anova(fit.reduced.gbcs, model.bic.gbcs)
+```
+
+```{r}
+reduced.sq <- coxph(Surv(survtime,censdead) ~ size + prog_recp + rectime + size:prog_recp + size:rectime + prog_recp:rectime)
+step(reduced.sq, direction = "both", criterion = "AIC")
+step(reduced.sq, direction = "both", criterion = "BIC")
+```
+
+```{r}
+fit.full.inter2 <- coxph(Surv(survtime,censdead) ~ (. -rectime -age.med_f)^2, data=gbcs2)
+fit.full.inter3 <- coxph(Surv(survtime,censdead) ~ (. -rectime -age)^2, data=gbcs2)
+```
+
+```{r}
+step(fit.full.inter2, direction = "backward", criterion = "AIC")
+step(fit.full.inter3, direction = "backward", criterion = "AIC")
+```
+
+```{r}
+step(fit.full.inter2, direction = "backward", criterion = "BIC")
+step(fit.full.inter3, direction = "backward", criterion = "BIC")
+```
+
+```{r}
+# Final Model with interaction from AIC and BIC stepwise selection
+model.aic.bic <- coxph(formula = Surv(survtime, censdead) ~ age + size + nodes + 
+    prog_recp + estrg_recp + rectime + menopause_f + hormone_f + 
+    grade_f + censrec_f + age:size + age:estrg_recp + age:menopause_f + 
+    age:hormone_f + age:grade_f + size:hormone_f + size:grade_f + 
+    nodes:prog_recp + nodes:rectime + nodes:hormone_f + nodes:grade_f + 
+    prog_recp:rectime + prog_recp:grade_f + estrg_recp:hormone_f + 
+    rectime:grade_f + menopause_f:hormone_f + menopause_f:grade_f + 
+    hormone_f:grade_f, data = gbcs2)
+
+fit.aic <- coxph(formula = Surv(survtime, censdead) ~ age + size + nodes + 
+    prog_recp + estrg_recp + menopause_f + hormone_f + grade_f + 
+    censrec_f + rectime.med_f + age:size + age:nodes + age:menopause_f + 
+    age:hormone_f + age:grade_f + size:hormone_f + size:grade_f + 
+    size:rectime.med_f + nodes:prog_recp + nodes:grade_f + prog_recp:grade_f + 
+    prog_recp:rectime.med_f + estrg_recp:hormone_f + estrg_recp:grade_f + 
+    estrg_recp:rectime.med_f + menopause_f:hormone_f + menopause_f:rectime.med_f + 
+    hormone_f:grade_f + grade_f:rectime.med_f, data = gbcs2)
+
+fit.bic <- coxph(formula = Surv(survtime, censdead) ~ age + size + nodes + 
+    prog_recp + estrg_recp + menopause_f + hormone_f + grade_f + 
+    censrec_f + rectime.med_f + age:size + age:nodes + age:menopause_f + 
+    age:hormone_f + age:grade_f + size:hormone_f + size:grade_f + 
+    size:rectime.med_f + nodes:prog_recp + nodes:grade_f + prog_recp:grade_f + 
+    prog_recp:rectime.med_f + estrg_recp:hormone_f + estrg_recp:grade_f + 
+    estrg_recp:rectime.med_f + menopause_f:hormone_f + menopause_f:rectime.med_f + 
+    hormone_f:grade_f + grade_f:rectime.med_f, data = gbcs2)
+```
+
+### Step 8.1 Final Model Choices with Interaction
+
+```{r}
+(final.model.inter1 <- coxph(formula = Surv(survtime, censdead) ~ size + 
+    prog_recp + rectime.med_f + menopause_f + hormone_f + size:hormone_f +  
+    prog_recp:rectime.med_f, data = gbcs2) )
+
+(final.model.inter2 <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime + prog_recp:rectime) )
+
+(final.model.inter3 <- coxph(formula = Surv(survtime, censdead) ~ size + 
+    prog_recp + rectime + menopause_f + hormone_f + size:hormone_f +  
+    prog_recp:rectime, data = gbcs2) )
+```
+
+### Step 8.5: Check proportional hazards assumption!
+
+```{r}
+(cox.prop.assump1 <- cox.zph(final.model.inter1) )
+(cox.prop.assump2 <- cox.zph(final.model.inter2) )
+(cox.prop.assump2 <- cox.zph(final.model.inter3) )
+
+(final.model.no.inter <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime) )
+(cox.prop.assump2 <- cox.zph(final.model.no.inter) )
+```
+
+### Final Model Choices From Group Members
+
+```{r}
+## Kristine Liu Final Model Choices
+finalmodel.kl1 <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime) #These three variables were consistently significant across different combinations
+
+finalmodel.kl2 <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime + age) #Age is also a significant variable. Even though it is a continuous variable, we can considering adding it to the final model.
+
+## Aaron Niecestro Final Model Choices
+final.model.an1 <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime + prog_recp:rectime) # most basic model decided by AIC, BIC selection with interaction based on my variable choices
+
+final.model.an2 <- coxph(formula = Surv(survtime, censdead) ~ size +  prog_recp + rectime.med_f + menopause_f + hormone_f + size:hormone_f + prog_recp:rectime.med_f, data = gbcs2)   
+
+final.model.an3 <- coxph(formula = Surv(survtime, censdead) ~ size + prog_recp + 
+    rectime + menopause_f + hormone_f + size:hormone_f + prog_recp:rectime, 
+    data = gbcs2) # "Best" model I have created so far - my final choice for final model
+
+## Martha Rivera Final Model Choices
+final.model.mr1 <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime + prog_recp:rectime)
+
+final.model.mr2 <- coxph(formula = Surv(survtime, censdead) ~ size + prog_recp + 
+    rectime + menopause_f + nodes + hormone_f + prog_recp:rectime, 
+    data = gbcs2)
+```
+
+
+### Step 9: Thoroughly evaluate the model using case-wise deletion diagnostics to check for influential observations.
+#### Note: The result should be the final model
+
+#### Final Model using case-wise deletion diagnostics 
+#### Note: This model below was choosen and decided upon by the group from the Final Model Choice Selection above
+
+#### Final Model
+
+```{r}
+(fit.final.coxph <- coxph(Surv(survtime, censdead) ~ size + prog_recp + rectime + hormone_f + age.med_f + prog_recp:rectime + size:hormone_f ) )
+
+# Checking Porportional Hazards Assumption
+cox.zph(fit.final.coxph)
+```
+
+#### Checking the DfBeta Residuals for Final Model 
+
+```{r}
+# DFbetas for Cox Model for Variable 3
+rr.dfbeta <- residuals(fit.final.coxph, type="dfbeta")
+subject.index <- 1:nrow(rr.dfbeta)
+plot(rr.dfbeta[,3] ~ subject.index, axes=F)
+axis(1, at=seq(from=1, to=length(subject.index), by=5))
+axis(2)
+title("DFbeta for Final Model")
+identify(rr.dfbeta[,3] ~ subject.index)
+```
+
+#### Do you believe your final model?
+
+Yes
+
+#### Describe the Final Model.
+
+
+
+### Step 10: Weibull Model from Cox Proportional Hazards Model
+
+```{r}
+# Final Weibull Model
+
+fit.final.weib <- survreg(Surv(survtime, censdead) ~ size + prog_recp + rectime + hormone_f + age.med_f + prog_recp:rectime + size:hormone_f, dist="weibull")
+summary(fit.final.weib)
+```
+
+#### Step 11: Finding Betas
+
+```{r}
+(weib.coef.all <- fit.final.weib$coefficients[2:8] )
+(weib.coef.ph <- -weib.coef.all/fit.final.weib$scale ) # coeffiecients divided by scale
+(coxph.coef <- fit.final.coxph$coefficients)
+(coef.compare <- data.frame(weib.coef.ph, coxph.coef) )
+```
+
+#### Deviance Residual Plots
+
+```{r}
+resid.deviance <- residuals(fit.final.weib, type = "deviance")
+plot(resid.deviance ~ hormone_f, xlab = "Hormone Therapy", ylab = "Deviance Residuals", 
+     main = "Deviance Residuals versus Hormone Therapy")
+
+plot(resid.deviance ~ age.med_f, xlab = "Median Age at Time of Diagnosis", ylab = "Deviance Residuals", 
+     main = "Deviance Residuals versus Median Age at time of Diagnosis")
+```
+
+#### Case-Deletion Residual Plot for Final Model
+
+```{r}
+# Case Deletion for size
+resid.dfbeta <- residuals(fit.final.weib, type = "dfbeta")
+n.obs <- length(survtime)
+index.obs <- 1:n.obs
+plot(resid.dfbeta[,2] ~ index.obs, type = "h", xlab="Observation Number", ylab="Change in Size Coefficent", 
+     main = "Case Deletion Plot for the Variable Tumor Size")
+abline(h=0)
+
+identify(resid.dfbeta[,2] ~ index.obs)
+which(resid.dfbeta[,2] > 0.0005) # outliers identified here
+which(resid.dfbeta[,2] < -0.0005)
+```
+
+#### Residual Plot for Slides
+
+```{r}
+## Slide 4 Residual Plot
+
+plot(rr ~ rectime, xlab="Time until Recurrence", ylab="Residual", main="Martingale Plot of the Time unitl a Recurrence", pch=16)
+lines(lowess(rr ~ rectime), col="red", lwd=3)
+
+plot(rr ~ prog_recp, xlab="Number of Progesterone Receptors", ylab="Residual", main="Martingale Plot of the Number of Progesterone Receptors", pch=16)
+lines(lowess(rr ~ prog_recp), col="red" , lwd=3)
+```
+
+#### Treatment Comparison between Models
+
+```{r}
+# Coxph Model with hormone variable only
+result.coxph.hormone <- coxph(Surv(survtime, censdead) ~ hormone_f)
+summary(result.coxph.hormone)
+
+# Weibull Model with hormone variable only
+result.survreg.hormone <- survreg(Surv(survtime, censdead) ~ hormone_f, dist="weibull")
+summary(result.survreg.hormone)
+
+# Baseline Weibull Coefficient
+mu0.hat <- result.survreg.hormone$coefficients[1]
+sigma.hat <- result.survreg.hormone$scale
+alpha.hat <- 1/sigma.hat
+lambda0.hat <- exp(-mu0.hat)
+
+# Baseline survival function
+tt.vec <- 0:2601
+surv0.vec <- 1 - pweibull(tt.vec, shape = alpha.hat, scale = 1/lambda0.hat)
+
+gamma.hat <- result.survreg.hormone$coefficients[2]
+surv1.vec <- surv0.vec^(exp(-gamma.hat/sigma.hat))
+
+coxph.surv.est <- survfit(result.coxph.hormone, newdata = data.frame(list(hormone_f=c("No", "Yes"))))
+
+# Choice 1
+plot(coxph.surv.est, col=c("red", "red"), lwd=2, ylim = c(0.4,1), 
+     xlab = "Survival Time in days", ylab = "Survival Probability", main="Cox and Weibull Hormone Therapy Comparison")
+lines(surv0.vec ~ tt.vec, col="blue", lwd=1)
+lines(surv1.vec ~ tt.vec, col = "blue", lwd=1)
+legend("bottomleft", 
+       legend=c("Cox Model Hormone Therapy", "Cox Model No Therapy", 
+                "Weibull Model Hormone Therapy", "Weibull Model No Therapy"),
+       col=c("red", "red", "blue", "blue"), lwd = c(2,2,1,1), cex=0.8)
+
+# Choice 2
+plot(coxph.surv.est, col=c("red", "blue"), lwd=2, 
+     xlab = "Survival Time in days", ylab = "Survival Probability", main="Comparisons of Hormone Therapy")
+lines(surv0.vec ~ tt.vec, col="red", lwd=1)
+lines(surv1.vec ~ tt.vec, col = "blue", lwd=1)
+legend(x=250, y=0.4, 
+       legend=c("Cox Model No Therapy", "Weibull Model No Therapy", 
+                "Cox Model Hormone Therapy", "Weibull Model Hormone Therapy"),
+       col=c("red", "red", "blue", "blue"), lwd = c(2,1,2,1), cex=0.8)
+```
