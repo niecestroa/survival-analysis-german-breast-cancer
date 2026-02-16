@@ -635,3 +635,4 @@ legend(x=250, y=0.4,
                 "Cox Model Hormone Therapy", "Weibull Model Hormone Therapy"),
        col=c("red", "red", "blue", "blue"), lwd = c(2,1,2,1), cex=0.8)
 ```
+
